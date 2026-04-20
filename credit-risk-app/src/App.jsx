@@ -4,7 +4,7 @@ import InputForm from './components/InputForm'
 import ResultCard from './components/ResultCard'
 import ShapChart from './components/ShapChart'
 import Explanation from './components/Explanation'
-import { predictRisk } from './services/mockApi'
+import { predictRisk } from './services/api'
 
 /*
   App — Two-page layout:
