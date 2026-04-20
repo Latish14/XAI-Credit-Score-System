@@ -60,10 +60,10 @@ NUMERIC_INPUTS = [
 
 # SHAP background data — built once at startup from a zero-vector baseline
 # (Replace with a real sample_data.csv if available for better explanations)
-_bg = pd.DataFrame(
-    np.zeros((50, len(FEATURE_NAMES))), columns=FEATURE_NAMES
+_bg_scaled = pd.DataFrame(
+    scaler.transform(_bg), columns=FEATURE_NAMES
 )
-SHAP_EXPLAINER = shap.Explainer(xgb_model, _bg)
+SHAP_EXPLAINER = shap.Explainer(xgb_model, _bg_scaled)
 LIME_EXPLAINER = lime.lime_tabular.LimeTabularExplainer(
     training_data=_bg.values,
     feature_names=FEATURE_NAMES,
