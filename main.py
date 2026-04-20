@@ -42,27 +42,28 @@ scaler    = joblib.load(os.path.join(BASE_DIR, "scaler.pkl"))
 FEATURE_NAMES: list[str] = xgb_model.get_booster().feature_names
 
 # ── SHAP background ──
-# Use SCALED zeros as background so SHAP compares against
-# "average applicant" rather than "applicant with zero income".
-# XGBoost prediction still uses raw X — only SHAP uses scaled.
-_bg_raw = pd.DataFrame(np.zeros((50, len(FEATURE_NAMES))), columns=FEATURE_NAMES)
-_bg_scaled = pd.DataFrame(scaler.transform(_bg_raw), columns=FEATURE_NAMES)
+# ── SHAP background ──
+# Use scaler's own feature names to avoid mismatch
+SCALER_FEATURES = list(scaler.feature_names_in_)
 
-# Build a TreeExplainer directly — faster and more accurate for XGBoost
-# interventional perturbations remove the background dependency issue
+_bg_raw = pd.DataFrame(np.zeros((50, len(SCALER_FEATURES))), columns=SCALER_FEATURES)
+_bg_scaled = pd.DataFrame(scaler.transform(_bg_raw), columns=SCALER_FEATURES)
+
+# TreeExplainer uses XGB feature names — map scaled bg to XGB order
+_bg_for_shap = _bg_scaled.reindex(columns=FEATURE_NAMES, fill_value=0)
+
 SHAP_EXPLAINER = shap.TreeExplainer(
     xgb_model,
-    data=_bg_scaled,
+    data=_bg_for_shap,
     feature_perturbation="interventional",
 )
 
 LIME_EXPLAINER = lime.lime_tabular.LimeTabularExplainer(
-    training_data=_bg_scaled.values,
+    training_data=_bg_for_shap.values,
     feature_names=FEATURE_NAMES,
     class_names=["Repaid", "Defaulted"],
     mode="classification",
 )
-
 
 class LoanInput(BaseModel):
     loan_amnt:              float = Field(..., example=10000)
