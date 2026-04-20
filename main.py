@@ -60,6 +60,9 @@ NUMERIC_INPUTS = [
 
 # SHAP background data — built once at startup from a zero-vector baseline
 # (Replace with a real sample_data.csv if available for better explanations)
+_bg = pd.DataFrame(
+    np.zeros((50, len(FEATURE_NAMES))), columns=FEATURE_NAMES
+)
 _bg_scaled = pd.DataFrame(
     scaler.transform(_bg), columns=FEATURE_NAMES
 )
@@ -70,7 +73,6 @@ LIME_EXPLAINER = lime.lime_tabular.LimeTabularExplainer(
     class_names=["Repaid", "Defaulted"],
     mode="classification",
 )
-
 
 # ──────────────────────────────────────────────
 # Pydantic Schemas
