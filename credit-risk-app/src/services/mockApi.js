@@ -5,7 +5,7 @@ export const predictRisk = async (form) => {
     console.log("FORM DATA:", form);
     const formattedData = {
   loan_amnt: Number(form.loanAmount),
-  int_rate: Number(form.interestRate),
+  int_rate: Number(form.intRate),
   annual_inc: Number(form.annualIncome),
   dti: Number(form.dti),
   fico_range_low: Number(form.ficoScore),
