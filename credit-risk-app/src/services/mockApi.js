@@ -1,5 +1,23 @@
 const API_URL = import.meta.env.VITE_API_URL;
 
+const fetchWithRetry = async (url, options, retries = 2) => {
+  try {
+    const res = await fetch(url, options);
+
+    if (!res.ok) {
+      throw new Error("Request failed");
+    }
+
+    return res;
+  } catch (err) {
+    if (retries > 0) {
+      console.log("Retrying request...");
+      await new Promise(r => setTimeout(r, 5000)); // wait 5 sec
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    throw err;
+  }
+};
 export const predictRisk = async (form) => {
   try {
     // 🔥 FIX: map frontend → backend format
