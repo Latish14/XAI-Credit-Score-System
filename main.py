@@ -210,7 +210,9 @@ def predict(data: LoanInput):
         # ── Prediction — XGBoost uses RAW features ──
         model_name = data.model_choice.lower()
         if model_name == "logistic_regression":
-            X_scaled = scaler.transform(X_raw)
+            X_lr = X_raw.rename(columns={"emp_length_ 1 year": "emp_length_< 1 year"})
+            X_lr = X_lr.reindex(columns=SCALER_FEATURES, fill_value=0)
+            X_scaled = pd.DataFrame(scaler.transform(X_lr), columns=SCALER_FEATURES)
             prob_default = float(lr_model.predict_proba(X_scaled)[0][1])
             used_model = "Logistic Regression"
         else:
