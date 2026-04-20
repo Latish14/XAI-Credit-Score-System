@@ -19,9 +19,6 @@ import os
 
 warnings.filterwarnings("ignore")
 
-# ──────────────────────────────────────────────
-# App Setup
-# ──────────────────────────────────────────────
 app = FastAPI(
     title="XAI Credit Scoring API",
     description="Credit risk prediction with SHAP and LIME explanations",
@@ -36,9 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ──────────────────────────────────────────────
-# Load models
-# ──────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 xgb_model = joblib.load(os.path.join(BASE_DIR, "xgb_model.pkl"))
@@ -47,35 +41,29 @@ scaler    = joblib.load(os.path.join(BASE_DIR, "scaler.pkl"))
 
 FEATURE_NAMES: list[str] = xgb_model.get_booster().feature_names
 
-NUMERIC_INPUTS = [
-    "loan_amnt", "funded_amnt", "funded_amnt_inv",
-    "int_rate", "installment", "annual_inc", "dti",
-    "delinq_2yrs", "fico_range_low", "fico_range_high",
-    "inq_last_6mths", "open_acc", "pub_rec",
-    "revol_bal", "revol_util", "total_acc",
-    "credit_history_length",
-]
+# ── SHAP background ──
+# Use SCALED zeros as background so SHAP compares against
+# "average applicant" rather than "applicant with zero income".
+# XGBoost prediction still uses raw X — only SHAP uses scaled.
+_bg_raw = pd.DataFrame(np.zeros((50, len(FEATURE_NAMES))), columns=FEATURE_NAMES)
+_bg_scaled = pd.DataFrame(scaler.transform(_bg_raw), columns=FEATURE_NAMES)
 
-# ──────────────────────────────────────────────
-# SHAP / LIME background
-# XGBoost does NOT need scaling — use raw zeros as background
-# ──────────────────────────────────────────────
-_bg = pd.DataFrame(
-    np.zeros((50, len(FEATURE_NAMES))), columns=FEATURE_NAMES
+# Build a TreeExplainer directly — faster and more accurate for XGBoost
+# interventional perturbations remove the background dependency issue
+SHAP_EXPLAINER = shap.TreeExplainer(
+    xgb_model,
+    data=_bg_scaled,
+    feature_perturbation="interventional",
 )
 
-SHAP_EXPLAINER = shap.Explainer(xgb_model, _bg)
-
 LIME_EXPLAINER = lime.lime_tabular.LimeTabularExplainer(
-    training_data=_bg.values,
+    training_data=_bg_scaled.values,
     feature_names=FEATURE_NAMES,
     class_names=["Repaid", "Defaulted"],
     mode="classification",
 )
 
-# ──────────────────────────────────────────────
-# Pydantic Schemas
-# ──────────────────────────────────────────────
+
 class LoanInput(BaseModel):
     loan_amnt:              float = Field(..., example=10000)
     funded_amnt:            Optional[float] = None
@@ -94,7 +82,6 @@ class LoanInput(BaseModel):
     revol_util:             Optional[float] = Field(default=40.0)
     total_acc:              Optional[float] = Field(default=20)
     credit_history_length:  Optional[float] = Field(default=60)
-
     term:                   Optional[str] = Field(default="36 months")
     grade:                  Optional[str] = Field(default="B")
     sub_grade:              Optional[str] = Field(default="B3")
@@ -106,8 +93,7 @@ class LoanInput(BaseModel):
     initial_list_status:    Optional[str] = Field(default="f")
     application_type:       Optional[str] = Field(default="Individual")
     disbursement_method:    Optional[str] = Field(default="Cash")
-
-    model_choice: str = Field(default="xgboost")
+    model_choice:           str = Field(default="xgboost")
 
 
 class ShapFeature(BaseModel):
@@ -132,12 +118,8 @@ class PredictionResponse(BaseModel):
     explanation_text: str
 
 
-# ──────────────────────────────────────────────
-# Feature Engineering
-# ──────────────────────────────────────────────
 def _build_feature_vector(data: LoanInput) -> pd.DataFrame:
     row = {f: 0.0 for f in FEATURE_NAMES}
-
     row.update({
         "loan_amnt":             data.loan_amnt,
         "funded_amnt":           data.funded_amnt or data.loan_amnt,
@@ -157,59 +139,39 @@ def _build_feature_vector(data: LoanInput) -> pd.DataFrame:
         "total_acc":             data.total_acc or 20,
         "credit_history_length": data.credit_history_length or 60,
     })
-
     if data.term and "60" in data.term:
         row["term_ 60 months"] = 1
-
     if data.grade and data.grade != "A":
         key = f"grade_{data.grade.upper()}"
-        if key in row:
-            row[key] = 1
-
+        if key in row: row[key] = 1
     if data.sub_grade:
         key = f"sub_grade_{data.sub_grade.upper()}"
-        if key in row:
-            row[key] = 1
-
+        if key in row: row[key] = 1
     if data.emp_length:
         key = f"emp_length_{data.emp_length}"
-        if key in row:
-            row[key] = 1
-
+        if key in row: row[key] = 1
     if data.home_ownership:
         key = f"home_ownership_{data.home_ownership.upper()}"
-        if key in row:
-            row[key] = 1
-
+        if key in row: row[key] = 1
     if data.verification_status and data.verification_status != "Not Verified":
         key = f"verification_status_{data.verification_status}"
-        if key in row:
-            row[key] = 1
-
+        if key in row: row[key] = 1
     if data.purpose:
         key = f"purpose_{data.purpose.lower()}"
-        if key in row:
-            row[key] = 1
-
+        if key in row: row[key] = 1
     if data.addr_state:
         key = f"addr_state_{data.addr_state.upper()}"
-        if key in row:
-            row[key] = 1
-
+        if key in row: row[key] = 1
     if data.initial_list_status and data.initial_list_status.lower() == "w":
         row["initial_list_status_w"] = 1
-
     if data.application_type and data.application_type == "Joint App":
         row["application_type_Joint App"] = 1
-
     if data.disbursement_method and data.disbursement_method == "DirectPay":
         row["disbursement_method_DirectPay"] = 1
-
     return pd.DataFrame([row], columns=FEATURE_NAMES)
 
 
-def _generate_explanation_text(prediction: str, probability: float,
-                                shap_features: list[ShapFeature]) -> str:
+def _generate_explanation_text(prediction, probability, shap_features):
     top = sorted(shap_features, key=lambda x: abs(x.shap_value), reverse=True)[:3]
     direction = "higher" if prediction == "Default" else "lower"
     lines = [
@@ -226,18 +188,13 @@ def _generate_explanation_text(prediction: str, probability: float,
     return " ".join(lines)
 
 
-# ──────────────────────────────────────────────
-# Routes
-# ──────────────────────────────────────────────
 @app.get("/")
 def root():
     return {"message": "XAI Credit Scoring API is running 🚀"}
 
-
 @app.get("/health")
 def health():
     return {"status": "ok", "models_loaded": ["xgboost", "logistic_regression"]}
-
 
 @app.get("/features")
 def get_features():
@@ -247,34 +204,37 @@ def get_features():
 @app.post("/predict", response_model=PredictionResponse)
 def predict(data: LoanInput):
     try:
-        X = _build_feature_vector(data)
+        X_raw = _build_feature_vector(data)
 
-        # ── Model selection ──
+        # ── Prediction — XGBoost uses RAW features ──
         model_name = data.model_choice.lower()
         if model_name == "logistic_regression":
-            X_scaled = scaler.transform(X)
+            X_scaled = scaler.transform(X_raw)
             prob_default = float(lr_model.predict_proba(X_scaled)[0][1])
             used_model = "Logistic Regression"
         else:
-            prob_default = float(xgb_model.predict_proba(X)[0][1])
+            prob_default = float(xgb_model.predict_proba(X_raw)[0][1])
             used_model = "XGBoost"
 
         prediction = "Default" if prob_default >= 0.5 else "No Default"
         risk_score = int(prob_default * 100)
 
-        # ── SHAP ──
-        # XGBoost does not need scaling — pass raw X directly
-        shap_values = SHAP_EXPLAINER(X)
-        sv = shap_values.values[0]
+        # ── SHAP — use SCALED features so values are comparable ──
+        # This makes SHAP values small decimals (e.g. +0.3, -0.2)
+        # instead of proportional to raw feature magnitude (85000 income etc.)
+        X_scaled_shap = pd.DataFrame(
+            scaler.transform(X_raw), columns=FEATURE_NAMES
+        )
+        sv = SHAP_EXPLAINER.shap_values(X_scaled_shap)[0]
+        # For binary classification TreeExplainer returns list[2] — take class 1
+        if isinstance(sv, list):
+            sv = sv[1]
 
         shap_df = pd.DataFrame({
             "feature":    FEATURE_NAMES,
-            "value":      X.iloc[0].values,   # raw feature value (for display)
-            "shap_value": sv,                  # true SHAP impact score
+            "value":      X_raw.iloc[0].values,   # raw value shown in tooltip
+            "shap_value": sv,
         })
-
-        # Clip extreme values caused by zero-vector background artifact
-        shap_df["shap_value"] = shap_df["shap_value"].clip(-3, 3)
 
         top_shap = (
             shap_df
@@ -286,14 +246,14 @@ def predict(data: LoanInput):
             ShapFeature(
                 feature=row["feature"],
                 value=float(row["value"]),
-                shap_value=float(row["shap_value"]),
+                shap_value=round(float(row["shap_value"]), 4),
             )
             for _, row in top_shap.iterrows()
         ]
 
         # ── LIME ──
         lime_exp = LIME_EXPLAINER.explain_instance(
-            data_row=X.iloc[0].values,
+            data_row=X_scaled_shap.iloc[0].values,
             predict_fn=xgb_model.predict_proba,
             num_features=10,
         )
