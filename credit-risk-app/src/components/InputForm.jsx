@@ -18,6 +18,19 @@ const FIELDS = [
     ),
   },
   {
+  key: 'intRate',
+  label: 'Interest Rate',
+  unit: '%',
+  placeholder: '13.5',
+  icon: (
+    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="5" x2="5" y2="19" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
+    </svg>
+  ),
+},
+  {
     key: 'annualIncome',
     label: 'Annual Income',
     unit: 'USD',
@@ -81,12 +94,13 @@ const SAMPLE_DATA = {
   ficoScore: '720',
   empLength: '6',
   creditHistory: '12',
+  intRate: '13.5',
 }
 
 export default function InputForm({ onSubmit, isLoading }) {
   const [form, setForm] = useState({
     loanAmount: '', annualIncome: '', dti: '',
-    ficoScore: '', empLength: '', creditHistory: '',
+    ficoScore: '', empLength: '', creditHistory: '',intRate: '',
   })
   const [error, setError] = useState('')
 
