@@ -41,8 +41,8 @@ export default function RiskGauge({ probability, size = 200 }) {
   const fillEnd  = toPoint(fillDeg)
   const largeArc = fillDeg > 180 ? 1 : 0
   const fillPath = animatedValue > 0.01
-    ? `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${fillEnd.x} ${fillEnd.y}`
-    : ''
+  ? `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 0 ${fillEnd.x} ${fillEnd.y}`
+  : ''
 
   const color = getColor(animatedValue)
   const pct   = (animatedValue * 100).toFixed(1)
