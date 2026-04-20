@@ -30,25 +30,23 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # tighten in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ──────────────────────────────────────────────
-# Load models (resolve path relative to this file)
+# Load models
 # ──────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-xgb_model  = joblib.load(os.path.join(BASE_DIR, "xgb_model.pkl"))
-lr_model   = joblib.load(os.path.join(BASE_DIR, "lr_model.pkl"))
-scaler     = joblib.load(os.path.join(BASE_DIR, "scaler.pkl"))
+xgb_model = joblib.load(os.path.join(BASE_DIR, "xgb_model.pkl"))
+lr_model  = joblib.load(os.path.join(BASE_DIR, "lr_model.pkl"))
+scaler    = joblib.load(os.path.join(BASE_DIR, "scaler.pkl"))
 
-# All 200 features the model was trained on
 FEATURE_NAMES: list[str] = xgb_model.get_booster().feature_names
 
-# Key numeric features accepted directly from the user form
 NUMERIC_INPUTS = [
     "loan_amnt", "funded_amnt", "funded_amnt_inv",
     "int_rate", "installment", "annual_inc", "dti",
@@ -58,15 +56,16 @@ NUMERIC_INPUTS = [
     "credit_history_length",
 ]
 
-# SHAP background data — built once at startup from a zero-vector baseline
-# (Replace with a real sample_data.csv if available for better explanations)
+# ──────────────────────────────────────────────
+# SHAP / LIME background
+# XGBoost does NOT need scaling — use raw zeros as background
+# ──────────────────────────────────────────────
 _bg = pd.DataFrame(
     np.zeros((50, len(FEATURE_NAMES))), columns=FEATURE_NAMES
 )
-_bg_scaled = pd.DataFrame(
-    scaler.transform(_bg), columns=FEATURE_NAMES
-)
-SHAP_EXPLAINER = shap.Explainer(xgb_model, _bg_scaled)
+
+SHAP_EXPLAINER = shap.Explainer(xgb_model, _bg)
+
 LIME_EXPLAINER = lime.lime_tabular.LimeTabularExplainer(
     training_data=_bg.values,
     feature_names=FEATURE_NAMES,
@@ -78,7 +77,6 @@ LIME_EXPLAINER = lime.lime_tabular.LimeTabularExplainer(
 # Pydantic Schemas
 # ──────────────────────────────────────────────
 class LoanInput(BaseModel):
-    # Core numeric features
     loan_amnt:              float = Field(..., example=10000)
     funded_amnt:            Optional[float] = None
     funded_amnt_inv:        Optional[float] = None
@@ -97,41 +95,40 @@ class LoanInput(BaseModel):
     total_acc:              Optional[float] = Field(default=20)
     credit_history_length:  Optional[float] = Field(default=60)
 
-    # Categorical (user-facing)
-    term:                   Optional[str]  = Field(default="36 months",  example="36 months")
-    grade:                  Optional[str]  = Field(default="B",          example="B")
-    sub_grade:              Optional[str]  = Field(default="B3",         example="B3")
-    emp_length:             Optional[str]  = Field(default="5 years",    example="5 years")
-    home_ownership:         Optional[str]  = Field(default="RENT",       example="RENT")
-    verification_status:    Optional[str]  = Field(default="Verified",   example="Verified")
-    purpose:                Optional[str]  = Field(default="debt_consolidation", example="debt_consolidation")
-    addr_state:             Optional[str]  = Field(default="CA",         example="CA")
-    initial_list_status:    Optional[str]  = Field(default="f",          example="f")
-    application_type:       Optional[str]  = Field(default="Individual", example="Individual")
-    disbursement_method:    Optional[str]  = Field(default="Cash",       example="Cash")
+    term:                   Optional[str] = Field(default="36 months")
+    grade:                  Optional[str] = Field(default="B")
+    sub_grade:              Optional[str] = Field(default="B3")
+    emp_length:             Optional[str] = Field(default="5 years")
+    home_ownership:         Optional[str] = Field(default="RENT")
+    verification_status:    Optional[str] = Field(default="Verified")
+    purpose:                Optional[str] = Field(default="debt_consolidation")
+    addr_state:             Optional[str] = Field(default="CA")
+    initial_list_status:    Optional[str] = Field(default="f")
+    application_type:       Optional[str] = Field(default="Individual")
+    disbursement_method:    Optional[str] = Field(default="Cash")
 
-    model_choice: str = Field(default="xgboost", example="xgboost")
+    model_choice: str = Field(default="xgboost")
 
 
 class ShapFeature(BaseModel):
-    feature: str
-    value:   float
+    feature:    str
+    value:      float
     shap_value: float
 
 
 class LimeFeature(BaseModel):
-    feature:    str
-    impact:     float
-    direction:  str          # "increases_default" | "decreases_default"
+    feature:   str
+    impact:    float
+    direction: str
 
 
 class PredictionResponse(BaseModel):
-    prediction:      str          # "Default" | "No Default"
-    probability:     float        # probability of default  (0–1)
-    risk_score:      int          # 0–100 (higher = riskier)
-    model_used:      str
-    shap_features:   list[ShapFeature]
-    lime_features:   list[LimeFeature]
+    prediction:       str
+    probability:      float
+    risk_score:       int
+    model_used:       str
+    shap_features:    list[ShapFeature]
+    lime_features:    list[LimeFeature]
     explanation_text: str
 
 
@@ -139,16 +136,14 @@ class PredictionResponse(BaseModel):
 # Feature Engineering
 # ──────────────────────────────────────────────
 def _build_feature_vector(data: LoanInput) -> pd.DataFrame:
-    """Convert LoanInput → DataFrame with all 200 model features."""
     row = {f: 0.0 for f in FEATURE_NAMES}
 
-    # Numeric direct-map
-    numeric_map = {
+    row.update({
         "loan_amnt":             data.loan_amnt,
-        "funded_amnt":           data.funded_amnt  or data.loan_amnt,
+        "funded_amnt":           data.funded_amnt or data.loan_amnt,
         "funded_amnt_inv":       data.funded_amnt_inv or data.loan_amnt,
         "int_rate":              data.int_rate,
-        "installment":           data.installment  or round(data.loan_amnt * 0.03, 2),
+        "installment":           data.installment or round(data.loan_amnt * 0.03, 2),
         "annual_inc":            data.annual_inc,
         "dti":                   data.dti,
         "delinq_2yrs":           data.delinq_2yrs or 0,
@@ -161,64 +156,52 @@ def _build_feature_vector(data: LoanInput) -> pd.DataFrame:
         "revol_util":            data.revol_util or 40.0,
         "total_acc":             data.total_acc or 20,
         "credit_history_length": data.credit_history_length or 60,
-    }
-    row.update(numeric_map)
+    })
 
-    # term (one-hot: only " 60 months" flagged; 36 months = all zeros)
     if data.term and "60" in data.term:
         row["term_ 60 months"] = 1
 
-    # grade
     if data.grade and data.grade != "A":
         key = f"grade_{data.grade.upper()}"
         if key in row:
             row[key] = 1
 
-    # sub_grade
     if data.sub_grade:
         key = f"sub_grade_{data.sub_grade.upper()}"
         if key in row:
             row[key] = 1
 
-    # emp_length
     if data.emp_length:
         key = f"emp_length_{data.emp_length}"
         if key in row:
             row[key] = 1
 
-    # home_ownership
     if data.home_ownership:
         key = f"home_ownership_{data.home_ownership.upper()}"
         if key in row:
             row[key] = 1
 
-    # verification_status
     if data.verification_status and data.verification_status != "Not Verified":
         key = f"verification_status_{data.verification_status}"
         if key in row:
             row[key] = 1
 
-    # purpose
     if data.purpose:
         key = f"purpose_{data.purpose.lower()}"
         if key in row:
             row[key] = 1
 
-    # addr_state
     if data.addr_state:
         key = f"addr_state_{data.addr_state.upper()}"
         if key in row:
             row[key] = 1
 
-    # initial_list_status
     if data.initial_list_status and data.initial_list_status.lower() == "w":
         row["initial_list_status_w"] = 1
 
-    # application_type
     if data.application_type and data.application_type == "Joint App":
         row["application_type_Joint App"] = 1
 
-    # disbursement_method
     if data.disbursement_method and data.disbursement_method == "DirectPay":
         row["disbursement_method_DirectPay"] = 1
 
@@ -227,15 +210,12 @@ def _build_feature_vector(data: LoanInput) -> pd.DataFrame:
 
 def _generate_explanation_text(prediction: str, probability: float,
                                 shap_features: list[ShapFeature]) -> str:
-    """Build a short natural-language explanation from top SHAP features."""
     top = sorted(shap_features, key=lambda x: abs(x.shap_value), reverse=True)[:3]
-
     direction = "higher" if prediction == "Default" else "lower"
     lines = [
         f"This applicant has a {probability*100:.1f}% probability of default, "
         f"indicating {direction} credit risk."
     ]
-
     for feat in top:
         sign = "increases" if feat.shap_value > 0 else "decreases"
         lines.append(
@@ -243,7 +223,6 @@ def _generate_explanation_text(prediction: str, probability: float,
             f"({feat.value:.2f}) {sign} default risk "
             f"(SHAP: {feat.shap_value:+.3f})."
         )
-
     return " ".join(lines)
 
 
@@ -262,7 +241,6 @@ def health():
 
 @app.get("/features")
 def get_features():
-    """Return the list of all model features (useful for frontend dev)."""
     return {"features": FEATURE_NAMES, "count": len(FEATURE_NAMES)}
 
 
@@ -282,23 +260,28 @@ def predict(data: LoanInput):
             used_model = "XGBoost"
 
         prediction = "Default" if prob_default >= 0.5 else "No Default"
-        risk_score  = int(prob_default * 100)
+        risk_score = int(prob_default * 100)
 
         # ── SHAP ──
-        X_scaled_shap = pd.DataFrame(
-        scaler.transform(X), columns=FEATURE_NAMES
-        )
-        shap_values = SHAP_EXPLAINER(X_scaled_shap)
+        # XGBoost does not need scaling — pass raw X directly
+        shap_values = SHAP_EXPLAINER(X)
         sv = shap_values.values[0]
+
         shap_df = pd.DataFrame({
             "feature":    FEATURE_NAMES,
-            "value":      X.iloc[0].values,       # raw value for display
-            "shap_value": sv,                     # scaled SHAP impact
+            "value":      X.iloc[0].values,   # raw feature value (for display)
+            "shap_value": sv,                  # true SHAP impact score
         })
+
+        # Clip extreme values caused by zero-vector background artifact
+        shap_df["shap_value"] = shap_df["shap_value"].clip(-3, 3)
+
         top_shap = (
-            shap_df.reindex(shap_df["shap_value"].abs().sort_values(ascending=False).index)
+            shap_df
+            .reindex(shap_df["shap_value"].abs().sort_values(ascending=False).index)
             .head(10)
         )
+
         shap_features = [
             ShapFeature(
                 feature=row["feature"],
@@ -316,7 +299,6 @@ def predict(data: LoanInput):
         )
         lime_features = []
         for feat_label, impact in lime_exp.as_list():
-            # Map raw LIME labels back to friendly feature names
             matched = next(
                 (f for f in FEATURE_NAMES if f in feat_label), feat_label
             )
