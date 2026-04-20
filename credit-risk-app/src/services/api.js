@@ -101,7 +101,8 @@ export async function predictRisk(formData) {
     return normaliseBackendResponse(data)
 
   } catch (err) {
-    console.warn('Fallback to mock:', err.message)
-    return mockPredict(formData)
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out. Render backend may be sleeping — try again in 30 seconds.')
+    }
+    throw new Error(err.message || 'Prediction failed')
   }
-}
