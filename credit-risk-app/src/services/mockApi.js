@@ -38,7 +38,7 @@ export const predictRisk = async (form) => {
 
     console.log("Sending:", formattedData);
 
-    const response = await fetch(`${API_URL}/predict`, {
+    const response = await fetchWithRetry(`${API_URL}/predict`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
