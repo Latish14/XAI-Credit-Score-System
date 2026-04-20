@@ -63,10 +63,11 @@ function normaliseBackendResponse(raw) {
   return {
     prediction: raw.prediction,
     probability: raw.probability,
+    riskScore: raw.risk_score,          // ← also add this, was missing
     shapValues: (raw.shap_features || []).map(f => ({
       feature: f.feature.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      value: f.shap_value,
-      impact: f.shap_value > 0 ? 'negative' : 'positive',
+      value: f.shap_value,              // the bar length
+      impact: f.shap_value > 0 ? 'positive' : 'negative',  // ← FLIPPED
     })),
     explanation: raw.explanation_text || '',
   }
