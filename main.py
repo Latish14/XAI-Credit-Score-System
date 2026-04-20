@@ -221,13 +221,13 @@ def predict(data: LoanInput):
         risk_score = int(prob_default * 100)
 
         # ── SHAP — use SCALED features so values are comparable ──
-        # This makes SHAP values small decimals (e.g. +0.3, -0.2)
-        # instead of proportional to raw feature magnitude (85000 income etc.)
+        X_for_scaler = X_raw.rename(columns={"emp_length_ 1 year": "emp_length_< 1 year"})
+        X_for_scaler = X_for_scaler.reindex(columns=SCALER_FEATURES, fill_value=0)
         X_scaled_shap = pd.DataFrame(
-            scaler.transform(X_raw), columns=FEATURE_NAMES
-        )
+            scaler.transform(X_for_scaler), columns=SCALER_FEATURES
+        ).reindex(columns=FEATURE_NAMES, fill_value=0)
+
         sv = SHAP_EXPLAINER.shap_values(X_scaled_shap)[0]
-        # For binary classification TreeExplainer returns list[2] — take class 1
         if isinstance(sv, list):
             sv = sv[1]
 
