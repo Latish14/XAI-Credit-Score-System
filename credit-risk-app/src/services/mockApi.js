@@ -1,26 +1,8 @@
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = "https://xai-credit-score-system.onrender.com";
 
-const fetchWithRetry = async (url, options, retries = 2) => {
-  try {
-    const res = await fetch(url, options);
-
-    if (!res.ok) {
-      throw new Error("Request failed");
-    }
-
-    return res;
-  } catch (err) {
-    if (retries > 0) {
-      console.log("Retrying request...");
-      await new Promise(r => setTimeout(r, 5000)); // wait 5 sec
-      return fetchWithRetry(url, options, retries - 1);
-    }
-    throw err;
-  }
-};
 export const predictRisk = async (form) => {
   try {
-    // 🔥 FIX: map frontend → backend format
+    // ✅ FIXED mapping
     const formattedData = {
       loan_amnt: Number(form.loan_amount),
       int_rate: Number(form.int_rate),
@@ -28,7 +10,7 @@ export const predictRisk = async (form) => {
       dti: Number(form.dti),
       fico_range_low: Number(form.fico_score),
 
-      // optional safe defaults
+      // safe defaults (optional fields)
       term: "36 months",
       grade: "B",
       home_ownership: "RENT",
@@ -36,9 +18,9 @@ export const predictRisk = async (form) => {
       purpose: "debt_consolidation"
     };
 
-    console.log("Sending:", formattedData);
+    console.log("Sending to backend:", formattedData);
 
-    const response = await fetchWithRetry(`${API_URL}/predict`, {
+    const response = await fetch(`${API_URL}/predict`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -50,7 +32,7 @@ export const predictRisk = async (form) => {
 
     if (!response.ok) {
       console.error("Backend error:", result);
-      throw new Error("API failed");
+      throw new Error("API error");
     }
 
     return {
