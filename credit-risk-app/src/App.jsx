@@ -15,11 +15,13 @@ export default function App() {
   const [page, setPage] = useState('home')        // 'home' | 'assess'
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const resultRef = useRef(null)
 
   const handleSubmit = async (formData) => {
     setLoading(true)
     setResult(null)
+    setError('')
     try {
       const data = await predictRisk(formData)
       setResult(data)
@@ -29,6 +31,11 @@ export default function App() {
       }, 200)
     } catch (err) {
       console.error('Prediction error:', err)
+      const msg =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Unable to generate assessment. Please check your inputs and try again.'
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -37,6 +44,7 @@ export default function App() {
   const goToAssess = () => {
     setPage('assess')
     setResult(null)
+    setError('')
   }
 
   // ─── HOMEPAGE ───
@@ -91,7 +99,7 @@ export default function App() {
 
           {/* Right — Results or placeholder */}
           <div className="space-y-6">
-            {!result && !loading && (
+            {!result && !loading && !error && (
               <div className="glass rounded-2xl p-10 text-center anim-enter-d2 min-h-[400px] flex flex-col items-center justify-center">
                 <div className="w-20 h-20 mx-auto mb-6 rounded-2xl glass-subtle flex items-center justify-center">
                   <svg className="w-10 h-10 text-accent/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
@@ -116,6 +124,25 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {error && !loading && (
+              <div className="glass rounded-2xl p-10 text-center anim-enter min-h-[400px] flex flex-col items-center justify-center">
+                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-risk-bg border border-risk-border flex items-center justify-center">
+                  <svg className="w-10 h-10 text-risk" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-heading mb-2">Assessment Failed</h3>
+                <p className="text-sm text-subtle max-w-md mx-auto leading-relaxed mb-6">{error}</p>
+                <button
+                  onClick={() => setError('')}
+                  className="text-sm font-medium text-accent hover:text-accent-hover transition-colors cursor-pointer"
+                >
+                  ← Try Again
+                </button>
               </div>
             )}
 

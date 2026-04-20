@@ -28,7 +28,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # Wildcard origin must not be combined with credentials (browser will block).
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -36,20 +37,17 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 xgb_model = joblib.load(os.path.join(BASE_DIR, "xgb_model.pkl"))
-lr_model  = joblib.load(os.path.join(BASE_DIR, "lr_model.pkl"))
-scaler    = joblib.load(os.path.join(BASE_DIR, "scaler.pkl"))
+lr_model = joblib.load(os.path.join(BASE_DIR, "lr_model.pkl"))
+scaler = joblib.load(os.path.join(BASE_DIR, "scaler.pkl"))
 
 FEATURE_NAMES: list[str] = xgb_model.get_booster().feature_names
 
-# ── SHAP background ──
-# ── SHAP background ──
-# Use scaler's own feature names to avoid mismatch
+# ── SHAP background — use scaler feature names to avoid mismatch
 SCALER_FEATURES = list(scaler.feature_names_in_)
 
 _bg_raw = pd.DataFrame(np.zeros((50, len(SCALER_FEATURES))), columns=SCALER_FEATURES)
 _bg_scaled = pd.DataFrame(scaler.transform(_bg_raw), columns=SCALER_FEATURES)
 
-# TreeExplainer uses XGB feature names — map scaled bg to XGB order
 _bg_for_shap = _bg_scaled.reindex(columns=FEATURE_NAMES, fill_value=0)
 
 SHAP_EXPLAINER = shap.TreeExplainer(
@@ -65,104 +63,117 @@ LIME_EXPLAINER = lime.lime_tabular.LimeTabularExplainer(
     mode="classification",
 )
 
+
 class LoanInput(BaseModel):
-    loan_amnt:              float = Field(..., example=10000)
-    funded_amnt:            Optional[float] = None
-    funded_amnt_inv:        Optional[float] = None
-    int_rate:               float = Field(..., example=13.5)
-    installment:            Optional[float] = None
-    annual_inc:             float = Field(..., example=60000)
-    dti:                    float = Field(..., example=18.5)
-    delinq_2yrs:            Optional[float] = Field(default=0)
-    fico_range_low:         float = Field(..., example=680)
-    fico_range_high:        Optional[float] = None
-    inq_last_6mths:         Optional[float] = Field(default=0)
-    open_acc:               Optional[float] = Field(default=10)
-    pub_rec:                Optional[float] = Field(default=0)
-    revol_bal:              Optional[float] = Field(default=5000)
-    revol_util:             Optional[float] = Field(default=40.0)
-    total_acc:              Optional[float] = Field(default=20)
-    credit_history_length:  Optional[float] = Field(default=60)
-    term:                   Optional[str] = Field(default="36 months")
-    grade:                  Optional[str] = Field(default="B")
-    sub_grade:              Optional[str] = Field(default="B3")
-    emp_length:             Optional[str] = Field(default="5 years")
-    home_ownership:         Optional[str] = Field(default="RENT")
-    verification_status:    Optional[str] = Field(default="Verified")
-    purpose:                Optional[str] = Field(default="debt_consolidation")
-    addr_state:             Optional[str] = Field(default="CA")
-    initial_list_status:    Optional[str] = Field(default="f")
-    application_type:       Optional[str] = Field(default="Individual")
-    disbursement_method:    Optional[str] = Field(default="Cash")
-    model_choice:           str = Field(default="xgboost")
+    loan_amnt: float = Field(..., example=10000)
+    funded_amnt: Optional[float] = None
+    funded_amnt_inv: Optional[float] = None
+    int_rate: float = Field(..., example=13.5)
+    installment: Optional[float] = None
+    annual_inc: float = Field(..., example=60000)
+    dti: float = Field(..., example=18.5)
+    delinq_2yrs: Optional[float] = Field(default=0)
+    fico_range_low: float = Field(..., example=680)
+    fico_range_high: Optional[float] = None
+    inq_last_6mths: Optional[float] = Field(default=0)
+    open_acc: Optional[float] = Field(default=10)
+    pub_rec: Optional[float] = Field(default=0)
+    revol_bal: Optional[float] = Field(default=5000)
+    revol_util: Optional[float] = Field(default=40.0)
+    total_acc: Optional[float] = Field(default=20)
+    credit_history_length: Optional[float] = Field(default=60)
+    term: Optional[str] = Field(default="36 months")
+    grade: Optional[str] = Field(default="B")
+    sub_grade: Optional[str] = Field(default="B3")
+    emp_length: Optional[str] = Field(default="5 years")
+    home_ownership: Optional[str] = Field(default="RENT")
+    verification_status: Optional[str] = Field(default="Verified")
+    purpose: Optional[str] = Field(default="debt_consolidation")
+    addr_state: Optional[str] = Field(default="CA")
+    initial_list_status: Optional[str] = Field(default="f")
+    application_type: Optional[str] = Field(default="Individual")
+    disbursement_method: Optional[str] = Field(default="Cash")
+    model_choice: str = Field(default="xgboost")
 
 
 class ShapFeature(BaseModel):
-    feature:    str
-    value:      float
+    feature: str
+    value: float
     shap_value: float
 
 
 class LimeFeature(BaseModel):
-    feature:   str
-    impact:    float
+    feature: str
+    impact: float
     direction: str
 
 
 class PredictionResponse(BaseModel):
-    prediction:       str
-    probability:      float
-    risk_score:       int
-    model_used:       str
-    shap_features:    list[ShapFeature]
-    lime_features:    list[LimeFeature]
+    prediction: str
+    probability: float
+    risk_score: int
+    model_used: str
+    shap_features: list[ShapFeature]
+    lime_features: list[LimeFeature]
     explanation_text: str
 
 
 def _build_feature_vector(data: LoanInput) -> pd.DataFrame:
     row = {f: 0.0 for f in FEATURE_NAMES}
-    row.update({
-        "loan_amnt":             data.loan_amnt,
-        "funded_amnt":           data.funded_amnt or data.loan_amnt,
-        "funded_amnt_inv":       data.funded_amnt_inv or data.loan_amnt,
-        "int_rate":              data.int_rate,
-        "installment":           data.installment or round(data.loan_amnt * 0.03, 2),
-        "annual_inc":            data.annual_inc,
-        "dti":                   data.dti,
-        "delinq_2yrs":           data.delinq_2yrs or 0,
-        "fico_range_low":        data.fico_range_low,
-        "fico_range_high":       data.fico_range_high or data.fico_range_low + 4,
-        "inq_last_6mths":        data.inq_last_6mths or 0,
-        "open_acc":              data.open_acc or 10,
-        "pub_rec":               data.pub_rec or 0,
-        "revol_bal":             data.revol_bal or 5000,
-        "revol_util":            data.revol_util or 40.0,
-        "total_acc":             data.total_acc or 20,
-        "credit_history_length": data.credit_history_length or 60,
-    })
+    row.update(
+        {
+            "loan_amnt": data.loan_amnt,
+            "funded_amnt": data.funded_amnt or data.loan_amnt,
+            "funded_amnt_inv": data.funded_amnt_inv or data.loan_amnt,
+            "int_rate": data.int_rate,
+            "installment": data.installment or round(data.loan_amnt * 0.03, 2),
+            "annual_inc": data.annual_inc,
+            "dti": data.dti,
+            "delinq_2yrs": data.delinq_2yrs or 0,
+            "fico_range_low": data.fico_range_low,
+            "fico_range_high": data.fico_range_high or data.fico_range_low + 4,
+            "inq_last_6mths": data.inq_last_6mths or 0,
+            "open_acc": data.open_acc or 10,
+            "pub_rec": data.pub_rec or 0,
+            "revol_bal": data.revol_bal or 5000,
+            "revol_util": data.revol_util or 40.0,
+            "total_acc": data.total_acc or 20,
+            "credit_history_length": data.credit_history_length or 60,
+        }
+    )
     if data.term and "60" in data.term:
         row["term_ 60 months"] = 1
     if data.grade and data.grade != "A":
         key = f"grade_{data.grade.upper()}"
-        if key in row: row[key] = 1
+        if key in row:
+            row[key] = 1
     if data.sub_grade:
         key = f"sub_grade_{data.sub_grade.upper()}"
-        if key in row: row[key] = 1
+        if key in row:
+            row[key] = 1
     if data.emp_length:
-        key = f"emp_length_{data.emp_length}"
-        if key in row: row[key] = 1
+        clean_emp = data.emp_length
+        if clean_emp in ["0 years", " 1 year", "< 1 year", "1 year"]:
+            clean_emp = " 1 year"
+        key = f"emp_length_{clean_emp}"
+        if key in row:
+            row[key] = 1
     if data.home_ownership:
         key = f"home_ownership_{data.home_ownership.upper()}"
-        if key in row: row[key] = 1
+        if key in row:
+            row[key] = 1
     if data.verification_status and data.verification_status != "Not Verified":
         key = f"verification_status_{data.verification_status}"
-        if key in row: row[key] = 1
+        if key in row:
+            row[key] = 1
     if data.purpose:
         key = f"purpose_{data.purpose.lower()}"
-        if key in row: row[key] = 1
+        if key in row:
+            row[key] = 1
     if data.addr_state:
         key = f"addr_state_{data.addr_state.upper()}"
-        if key in row: row[key] = 1
+        if key in row:
+            row[key] = 1
     if data.initial_list_status and data.initial_list_status.lower() == "w":
         row["initial_list_status_w"] = 1
     if data.application_type and data.application_type == "Joint App":
@@ -176,7 +187,7 @@ def _generate_explanation_text(prediction, probability, shap_features):
     top = sorted(shap_features, key=lambda x: abs(x.shap_value), reverse=True)[:3]
     direction = "higher" if prediction == "Default" else "lower"
     lines = [
-        f"This applicant has a {probability*100:.1f}% probability of default, "
+        f"This applicant has a {probability * 100:.1f}% probability of default, "
         f"indicating {direction} credit risk."
     ]
     for feat in top:
@@ -193,9 +204,11 @@ def _generate_explanation_text(prediction, probability, shap_features):
 def root():
     return {"message": "XAI Credit Scoring API is running 🚀"}
 
+
 @app.get("/health")
 def health():
     return {"status": "ok", "models_loaded": ["xgboost", "logistic_regression"]}
+
 
 @app.get("/features")
 def get_features():
@@ -207,7 +220,6 @@ def predict(data: LoanInput):
     try:
         X_raw = _build_feature_vector(data)
 
-        # ── Prediction — XGBoost uses RAW features ──
         model_name = data.model_choice.lower()
         if model_name == "logistic_regression":
             X_lr = X_raw.rename(columns={"emp_length_ 1 year": "emp_length_< 1 year"})
@@ -222,7 +234,6 @@ def predict(data: LoanInput):
         prediction = "Default" if prob_default >= 0.5 else "No Default"
         risk_score = int(prob_default * 100)
 
-        # ── SHAP — use SCALED features so values are comparable ──
         X_for_scaler = X_raw.rename(columns={"emp_length_ 1 year": "emp_length_< 1 year"})
         X_for_scaler = X_for_scaler.reindex(columns=SCALER_FEATURES, fill_value=0)
         X_scaled_shap = pd.DataFrame(
@@ -233,15 +244,16 @@ def predict(data: LoanInput):
         if isinstance(sv, list):
             sv = sv[1]
 
-        shap_df = pd.DataFrame({
-            "feature":    FEATURE_NAMES,
-            "value":      X_raw.iloc[0].values,   # raw value shown in tooltip
-            "shap_value": sv,
-        })
+        shap_df = pd.DataFrame(
+            {
+                "feature": FEATURE_NAMES,
+                "value": X_raw.iloc[0].values,
+                "shap_value": sv,
+            }
+        )
 
         top_shap = (
-            shap_df
-            .reindex(shap_df["shap_value"].abs().sort_values(ascending=False).index)
+            shap_df.reindex(shap_df["shap_value"].abs().sort_values(ascending=False).index)
             .head(10)
         )
 
@@ -254,7 +266,6 @@ def predict(data: LoanInput):
             for _, row in top_shap.iterrows()
         ]
 
-        # ── LIME ──
         lime_exp = LIME_EXPLAINER.explain_instance(
             data_row=X_scaled_shap.iloc[0].values,
             predict_fn=xgb_model.predict_proba,
@@ -262,9 +273,7 @@ def predict(data: LoanInput):
         )
         lime_features = []
         for feat_label, impact in lime_exp.as_list():
-            matched = next(
-                (f for f in FEATURE_NAMES if f in feat_label), feat_label
-            )
+            matched = next((f for f in FEATURE_NAMES if f in feat_label), feat_label)
             lime_features.append(
                 LimeFeature(
                     feature=matched.replace("_", " ").title(),
@@ -273,9 +282,7 @@ def predict(data: LoanInput):
                 )
             )
 
-        explanation_text = _generate_explanation_text(
-            prediction, prob_default, shap_features
-        )
+        explanation_text = _generate_explanation_text(prediction, prob_default, shap_features)
 
         return PredictionResponse(
             prediction=prediction,

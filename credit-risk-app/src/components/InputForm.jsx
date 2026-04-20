@@ -10,7 +10,7 @@ const FIELDS = [
     key: 'loanAmount',
     label: 'Loan Amount',
     unit: 'USD',
-    placeholder: '25,000',
+    placeholder: '25000',
     icon: (
       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
@@ -18,26 +18,24 @@ const FIELDS = [
     ),
   },
   {
-  key: 'intRate',
-  label: 'Interest Rate',
-  unit: '%',
-  placeholder: '13.5',
-  icon: (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="19" y1="5" x2="5" y2="19" />
-      <circle cx="6.5" cy="6.5" r="2.5" />
-      <circle cx="17.5" cy="17.5" r="2.5" />
-    </svg>
-  ),
-},
-  {
     key: 'annualIncome',
     label: 'Annual Income',
     unit: 'USD',
-    placeholder: '75,000',
+    placeholder: '85000',
     icon: (
       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="20" x2="12" y2="10" /><line x1="18" y1="20" x2="18" y2="4" /><line x1="6" y1="20" x2="6" y2="16" />
+      </svg>
+    ),
+  },
+  {
+    key: 'intRate',
+    label: 'Interest Rate',
+    unit: '%',
+    placeholder: '13.5',
+    icon: (
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
       </svg>
     ),
   },
@@ -67,7 +65,7 @@ const FIELDS = [
     key: 'empLength',
     label: 'Employment',
     unit: 'yrs',
-    placeholder: '5',
+    placeholder: '6',
     icon: (
       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16" />
@@ -78,7 +76,7 @@ const FIELDS = [
     key: 'creditHistory',
     label: 'Credit History',
     unit: 'yrs',
-    placeholder: '10',
+    placeholder: '12',
     icon: (
       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
@@ -90,17 +88,17 @@ const FIELDS = [
 const SAMPLE_DATA = {
   loanAmount: '25000',
   annualIncome: '85000',
+  intRate: '13.5',
   dti: '18.5',
   ficoScore: '720',
   empLength: '6',
   creditHistory: '12',
-  intRate: '13.5',
 }
 
 export default function InputForm({ onSubmit, isLoading }) {
   const [form, setForm] = useState({
-    loanAmount: '', annualIncome: '', dti: '',
-    ficoScore: '', empLength: '', creditHistory: '',intRate: '',
+    loanAmount: '', annualIncome: '', intRate: '', dti: '',
+    ficoScore: '', empLength: '', creditHistory: '',
   })
   const [error, setError] = useState('')
 
@@ -128,7 +126,6 @@ export default function InputForm({ onSubmit, isLoading }) {
 
   return (
     <form onSubmit={handleSubmit} className="glass-strong rounded-2xl p-8 anim-enter-d1">
-      {/* Title bar */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-base font-semibold text-heading">Borrower Details</h2>
@@ -143,7 +140,6 @@ export default function InputForm({ onSubmit, isLoading }) {
         </button>
       </div>
 
-      {/* Fields */}
       <div className="grid grid-cols-2 gap-x-5 gap-y-5">
         {FIELDS.map(f => (
           <div key={f.key}>
@@ -175,7 +171,6 @@ export default function InputForm({ onSubmit, isLoading }) {
         ))}
       </div>
 
-      {/* Error */}
       {error && (
         <div className="mt-3 text-xs text-risk flex items-center gap-1.5 anim-enter">
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -185,7 +180,6 @@ export default function InputForm({ onSubmit, isLoading }) {
         </div>
       )}
 
-      {/* Submit */}
       <button
         type="submit"
         disabled={isLoading}

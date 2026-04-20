@@ -5,9 +5,11 @@ import RiskGauge from './RiskGauge'
   White card with subtle shadow, gauge, verdict, and metric tiles.
 */
 export default function ResultCard({ result }) {
-  const { prediction, probability } = result
+  const { prediction, probability, risk_score: riskScore, model_used: modelUsed } = result
   const isDefault = prediction === 'Default'
   const pct = (probability * 100).toFixed(1)
+  const scoreLabel =
+    typeof riskScore === 'number' && !Number.isNaN(riskScore) ? `${riskScore}` : '—'
 
   const level =
     probability < 0.2  ? { label: 'Low Risk',       color: 'text-safe',  tagBg: 'bg-safe-bg',  tagBorder: 'border-safe-border' }
@@ -19,11 +21,18 @@ export default function ResultCard({ result }) {
   return (
     <div className="glass-strong rounded-2xl anim-enter-d1 overflow-hidden">
       {/* Header bar */}
-      <div className="px-6 py-3 border-b border-white/20 flex items-center justify-between">
+      <div className="px-6 py-3 border-b border-white/20 flex items-center justify-between gap-3">
         <p className="text-[11px] font-semibold text-subtle uppercase tracking-wider">Risk Report</p>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${level.tagBg} ${level.tagBorder} ${level.color}`}>
-          {level.label}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {modelUsed && (
+            <span className="text-[10px] text-faint font-medium px-2 py-0.5 rounded-md bg-white/40 border border-white/30">
+              {modelUsed}
+            </span>
+          )}
+          <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${level.tagBg} ${level.tagBorder} ${level.color}`}>
+            {level.label}
+          </span>
+        </div>
       </div>
 
       <div className="p-8">
@@ -57,7 +66,7 @@ export default function ResultCard({ result }) {
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'Probability', value: `${pct}%`, cls: level.color },
-                { label: 'Confidence', value: 'High', cls: 'text-heading' },
+                { label: 'Risk score', value: scoreLabel, cls: 'text-heading' },
               ].map(m => (
                 <div key={m.label} className="glass-subtle rounded-xl p-4 text-center">
                   <p className="text-[11px] text-faint uppercase tracking-wider mb-1">{m.label}</p>

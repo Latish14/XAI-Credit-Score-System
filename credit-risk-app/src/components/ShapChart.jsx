@@ -17,10 +17,19 @@ const ChartTooltip = ({ active, payload }) => {
   )
 }
 
-export default function ShapChart({ shapValues }) {
-  const data = shapValues.map(s => ({
+export default function ShapChart({ shapValues = [] }) {
+  if (!shapValues.length) {
+    return (
+      <div className="glass-strong rounded-2xl p-8 anim-enter-d2">
+        <p className="text-xs font-semibold text-subtle uppercase tracking-wider mb-2">Contributing Factors</p>
+        <p className="text-sm text-faint">No SHAP values returned for this assessment.</p>
+      </div>
+    )
+  }
+
+  const data = shapValues.map((s) => ({
     feature: s.feature,
-    value: parseFloat(s.value.toFixed(4)),
+    value: parseFloat(Number(s.value).toFixed(4)),
     impact: s.impact,
   }))
 
@@ -29,7 +38,7 @@ export default function ShapChart({ shapValues }) {
       <div className="flex items-center justify-between mb-6">
         <div>
           <p className="text-xs font-semibold text-subtle uppercase tracking-wider">Contributing Factors</p>
-          <p className="text-xs text-faint mt-1">Impact of each factor on the assessment</p>
+          <p className="text-xs text-faint mt-1">SHAP values — impact of each factor on default risk</p>
         </div>
         <div className="flex items-center gap-4 text-xs text-subtle">
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-safe" />Lowers risk</span>
@@ -37,7 +46,7 @@ export default function ShapChart({ shapValues }) {
         </div>
       </div>
       <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <BarChart data={data} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
             <XAxis type="number" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={{ stroke: '#E2E8F0' }} tickLine={{ stroke: '#E2E8F0' }} />
