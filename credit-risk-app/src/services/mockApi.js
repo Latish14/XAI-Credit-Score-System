@@ -2,6 +2,7 @@ const API_URL = "https://xai-credit-score-system.onrender.com";
 
 export const predictRisk = async (form) => {
   try {
+    console.log("FORM DATA:", form);
     const formattedData = {
   loan_amnt: Number(form.loanAmount),
   int_rate: Number(form.interestRate),
