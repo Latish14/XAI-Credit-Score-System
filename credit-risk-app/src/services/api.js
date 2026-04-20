@@ -1,32 +1,34 @@
 /**
  * api.js — Unified API service.
- *
- * Tries the real FastAPI backend first.
- * Falls back to the local mock if the backend is unreachable.
  */
 
 import { predictRisk as mockPredict } from './mockApi'
 
 const API_BASE = 'https://xai-credit-score-system.onrender.com'
-const TIMEOUT_MS = 12000 // 12 s — Render free tier can be slow to cold-start
+const TIMEOUT_MS = 20000 // 🔥 increased timeout (Render cold start)
 
 /**
- * Map the simple frontend form fields → FastAPI LoanInput schema.
+ * Map frontend → backend
  */
 function buildPayload(form) {
+  console.log("FORM DATA:", form) // 🔍 DEBUG
+
   const loanAmount = parseFloat(form.loanAmount) || 0
   const annualIncome = parseFloat(form.annualIncome) || 0
   const dti = parseFloat(form.dti) || 0
   const ficoScore = parseFloat(form.ficoScore) || 650
   const empLength = parseFloat(form.empLength) || 0
   const creditHistory = parseFloat(form.creditHistory) || 0
-  const intRate = parseFloat(form.intRate) || 13.5
 
-  return {
+  // 🔥 FIX: ensure interest rate NEVER becomes NaN
+  const intRate = parseFloat(form.intRate)
+  const safeRate = isNaN(intRate) ? 13.5 : intRate
+
+  const payload = {
     loan_amnt: loanAmount,
     funded_amnt: loanAmount,
     funded_amnt_inv: loanAmount,
-    int_rate: intRate,
+    int_rate: safeRate,   // ✅ FIXED
     installment: Math.round(loanAmount * 0.03 * 100) / 100,
     annual_inc: annualIncome,
     dti: dti,
@@ -39,7 +41,7 @@ function buildPayload(form) {
     revol_bal: 5000,
     revol_util: 40.0,
     total_acc: 20,
-    credit_history_length: creditHistory * 12, // years → months
+    credit_history_length: creditHistory * 12,
     term: '36 months',
     grade: ficoScore >= 740 ? 'A' : ficoScore >= 700 ? 'B' : ficoScore >= 660 ? 'C' : 'D',
     emp_length: empLength >= 10 ? '10+ years' : `${Math.round(empLength)} years`,
@@ -48,26 +50,30 @@ function buildPayload(form) {
     purpose: 'debt_consolidation',
     model_choice: 'xgboost',
   }
+
+  console.log("FINAL PAYLOAD:", payload) // 🔍 DEBUG
+
+  return payload
 }
 
 /**
- * Normalise the FastAPI response into the shape our components expect.
+ * Normalize response
  */
 function normaliseBackendResponse(raw) {
   return {
-    prediction: raw.prediction,                    // "Default" | "No Default"
-    probability: raw.probability,                   // 0–1
+    prediction: raw.prediction,
+    probability: raw.probability,
     shapValues: (raw.shap_features || []).map(f => ({
       feature: f.feature.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
       value: f.shap_value,
-      impact: f.shap_value > 0 ? 'negative' : 'positive',   // positive SHAP → raises risk
+      impact: f.shap_value > 0 ? 'negative' : 'positive',
     })),
     explanation: raw.explanation_text || '',
   }
 }
 
 /**
- * Main entry point — try real backend, fall back to mock.
+ * Main API call
  */
 export async function predictRisk(formData) {
   try {
@@ -82,6 +88,7 @@ export async function predictRisk(formData) {
       body: JSON.stringify(payload),
       signal: controller.signal,
     })
+
     clearTimeout(timer)
 
     if (!res.ok) {
@@ -92,9 +99,9 @@ export async function predictRisk(formData) {
 
     const data = await res.json()
     return normaliseBackendResponse(data)
+
   } catch (err) {
-    console.warn('Real API unavailable, using local mock:', err.message)
-    // Fallback to local mock so the app always works
+    console.warn('Fallback to mock:', err.message)
     return mockPredict(formData)
   }
 }
