@@ -283,12 +283,15 @@ def predict(data: LoanInput):
         risk_score  = int(prob_default * 100)
 
         # ── SHAP ──
-        shap_values = SHAP_EXPLAINER(X)
-        sv = shap_values.values[0]                 # shape (200,)
+        X_scaled_shap = pd.DataFrame(
+        scaler.transform(X), columns=FEATURE_NAMES
+        )
+        shap_values = SHAP_EXPLAINER(X_scaled_shap)
+        sv = shap_values.values[0]
         shap_df = pd.DataFrame({
             "feature":    FEATURE_NAMES,
-            "value":      X.iloc[0].values,
-            "shap_value": sv,
+            "value":      X.iloc[0].values,       # raw value for display
+            "shap_value": sv,                     # scaled SHAP impact
         })
         top_shap = (
             shap_df.reindex(shap_df["shap_value"].abs().sort_values(ascending=False).index)
